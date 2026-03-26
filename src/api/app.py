@@ -87,8 +87,13 @@ class PremiumResponse(BaseModel):
 
 
 def _build_feature_vector(claim: ClaimFeatures) -> np.ndarray:
-    """Build the numeric feature vector expected by models."""
-    loss_ratio = claim.premium / claim.coverage_amount if claim.coverage_amount > 0 else 0
+    """Build the numeric feature vector expected by models.
+    
+    Note: loss_ratio (claim_amount/premium) is unknown at prediction time since
+    claim_amount is the target. We use premium/coverage_amount as a proxy,
+    scaled to approximate the training distribution.
+    """
+    loss_ratio_proxy = claim.premium / claim.coverage_amount if claim.coverage_amount > 0 else 0
     claims_per_year = claim.prior_claims_count / max(claim.years_as_customer, 1)
     is_auto = int(claim.policy_type == "auto")
     is_home = int(claim.policy_type == "home")
@@ -107,7 +112,7 @@ def _build_feature_vector(claim: ClaimFeatures) -> np.ndarray:
         claim.witnesses,
         claim.injury_severity_num,
         claim.property_damage_num,
-        min(loss_ratio * 20, 20),                      # loss_ratio_clipped proxy
+        min(loss_ratio_proxy * 20, 20),                 # loss_ratio_clipped proxy (scaled)
         0,                                              # claim_to_coverage (unknown at prediction)
         claim.premium / claim.coverage_amount,          # premium_to_coverage
         claim.deductible / claim.coverage_amount,       # deductible_ratio
